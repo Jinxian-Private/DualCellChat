@@ -11,7 +11,7 @@ Taking advantage of spatial transcriptomic data and graph autoencoders, we prese
 The following Python packages are required in addition to standard `tensorflow` and `pytorch` machine learning frameworks:
 - `torch-geometric`: https://github.com/rusty1s/pytorch_geometric
 - `gravity-gae`: https://github.com/deezer/gravity_graph_autoencoders
-See dependency versions in `requirements.txt`.
+- See dependency versions in `requirements.txt`.
 
 ## Run Experiments
 You can run a demo from the command line:
