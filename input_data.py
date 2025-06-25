@@ -78,9 +78,6 @@ def read_LR(input_LR,LR_type):
     LR_df = pd.read_csv(open(input_LR)) 
     if LR_type:
         LR_df = LR_df[LR_df['annotation']==LR_type]
-    # LR_df = LR_df[LR_df['annotation']=='Cell-Cell Contact']
-    # LR_df = LR_df[LR_df['annotation']=='Secreted Signaling']
-    # LR_df = LR_df[LR_df['annotation']!='ECM-Receptor']
 
     interaction = LR_df['interaction_name'].values
     Ligand_list = []
@@ -90,7 +87,6 @@ def read_LR(input_LR,LR_type):
         interaction_i = interaction_i.split('_')
         Ligand_list.append(interaction_i[0])
         Receptor_list.append(interaction_i[1:]) 
-        # Receptor_all = Receptor_all + interaction_i[1:]
     return Ligand_list, Receptor_list, interaction
 
 def get_data(data_path, data_name, lambda_I):
@@ -122,33 +118,18 @@ def get_data(data_path, data_name, lambda_I):
         cell_type_indeces = np.load(data_file + 'cell_types.npy',allow_pickle=True)
         cell_type = cell_type_indeces.astype(np.int32)
 
-    ############## decide whether integrate distance matrix into sender_reciever_matrix 
-    # num_points = X_data.shape[0]
-    # adj_I = np.eye(num_points)
-    # adj_I = sp.csr_matrix(adj_I)
-    # adj = (1-lambda_I)*adj_0 + lambda_I*adj_I
     adj = adj_dist
-    # adj = adj_LR
-    # adj = (1-lambda_I)*adj_dist + lambda_I*adj_LR
-    # adj = adj_dist.todense() + adj_LR.todense()
-    # adj[adj>1]=1
-    # adj = sp.csr_matrix(adj)
-    
-    # return adj, X_data, cell_type_indeces
     return adj, X_data,  np.array(cell_type)
 
 
 def load_data_from_csv(data_name = 'cora_ml', directed=True):
     # Import and pack datasets
 
-    # python DeepLinc.py -exp ./dataset/seqFISH/counts.csv -adj ./dataset/seqFISH/adj.csv 
-    # -coordinate ./dataset/seqFISH/coord.csv -reference ./dataset/seqFISH/cell_type_1.csv
+    # data_path = 'generated_data/'
+    data_path = 'data/'
 
-    data_path = 'generated_data/'
-    # data_name = 'V1_Breast_Cancer_Block_A_Section_1/'
     lambda_I = 0.8
     adj, X_data, cell_type_indeces = get_data(data_path, data_name, lambda_I)
-    # adj, X_data, cell_type_indeces, genes_index = get_data(data_path, data_name, lambda_I)
 
     adj, features, labels = sp.csr_matrix(adj), sp.csr_matrix(X_data), cell_type_indeces
     print('adj:',np.shape(adj)) #(2995, 2995) -> (1597, 1597)
@@ -160,7 +141,6 @@ def load_data_from_csv(data_name = 'cora_ml', directed=True):
     if not directed:
         adj  = (adj + adj.T) / 2.0
         
-    # mask = train_test_split(labels, seed=1020, train_examples_per_class=20, val_size=500, test_size=None)
     mask = train_test_split(labels, seed=1020, train_examples_per_class=10, val_size=500, test_size=None)
     
     mask['train'] = torch.from_numpy(mask['train']).bool()
@@ -202,9 +182,6 @@ def load_data_from_csv(data_name = 'cora_ml', directed=True):
 def load_data_from_anndata(dataset_name = 'cora_ml', directed=True):
     # Import and pack datasets
 
-    # python DeepLinc.py -exp ./dataset/seqFISH/counts.csv -adj ./dataset/seqFISH/adj.csv 
-    # -coordinate ./dataset/seqFISH/coord.csv -reference ./dataset/seqFISH/cell_type_1.csv
-
     data_path = 'generated_data/'
     data_name = dataset_name+'/'
     lambda_I = 0.3
@@ -237,8 +214,6 @@ def load_data_from_anndata(dataset_name = 'cora_ml', directed=True):
     for index in range(len(Ligand_list)):
         l_gene = Ligand_list[index]
         r_gene = Receptor_list[index]
-        # print('l_gene:',l_gene)
-        # print('r_gene:',r_gene)
         lf_gene = [l_gene] + r_gene
         if (set(lf_gene) < set(list(genes))):
             l_expression = exp_df[l_gene].values
@@ -286,7 +261,6 @@ def load_data_from_anndata(dataset_name = 'cora_ml', directed=True):
     if not directed:
         adj  = (adj + adj.T) / 2.0
         
-    # mask = train_test_split(labels, seed=1020, train_examples_per_class=20, val_size=500, test_size=None)
     mask = train_test_split(labels, seed=1020, train_examples_per_class=10, val_size=500, test_size=None)
     
     mask['train'] = torch.from_numpy(mask['train']).bool()
@@ -329,9 +303,6 @@ def load_data_from_anndata(dataset_name = 'cora_ml', directed=True):
 def generate_graph_from_anndata(dataset_name = 'cora_ml', directed=True):
     # Import and pack datasets
 
-    # python DeepLinc.py -exp ./dataset/seqFISH/counts.csv -adj ./dataset/seqFISH/adj.csv 
-    # -coordinate ./dataset/seqFISH/coord.csv -reference ./dataset/seqFISH/cell_type_1.csv
-
     data_path = 'generated_data/'
     data_name = 'V1_Breast_Cancer_Block_A_Section_1/'
     lambda_I = 0.3
@@ -339,10 +310,6 @@ def generate_graph_from_anndata(dataset_name = 'cora_ml', directed=True):
 
     # # ############## load distance matrix
     data_file = data_path + data_name +'/'
-    # with open(data_file + 'Adjacent', 'rb') as fp:
-    #     adj = pickle.load(fp)
-    # adj = adj.todense()
-    # print(adj)
 
     #############  load ligand-Receptor, and generate sender_reciever_matrix 
     LR_file = 'data/LR/CellChatDB.human/interaction.csv'
@@ -354,7 +321,6 @@ def generate_graph_from_anndata(dataset_name = 'cora_ml', directed=True):
     # ligand_receptor_exp = exp_df[ligand_receptor_genes].values
     X_data = np.load('processed_data/V1_Breast_Cancer_Block_A_Section_1/adata_wopca.npy',allow_pickle=True)
     genes = np.load('processed_data/V1_Breast_Cancer_Block_A_Section_1/genes_filter.npy',allow_pickle=True)
-    # print(exp_df.columns.values)
     exp_df = pd.DataFrame(data=X_data,columns=genes)
     print(exp_df)
 
@@ -368,8 +334,6 @@ def generate_graph_from_anndata(dataset_name = 'cora_ml', directed=True):
         r_gene = Receptor_list[index]
         use_ligand_list.append(l_gene)
         use_receptor_list.append(r_gene)
-        # print('l_gene:',l_gene)
-        # print('r_gene:',r_gene)
         lf_gene = [l_gene] + r_gene
         if (set(lf_gene) < set(list(genes))):
             l_expression = exp_df[l_gene].values
@@ -386,12 +350,9 @@ def generate_graph_from_anndata(dataset_name = 'cora_ml', directed=True):
             # method1: top3 high expression cells
             sender_index = np.argsort(l_expression)[::-1]
             reciever_index = np.argsort(r_expression)[::-1]
-            # print(sender_index) 
-            # print(reciever_index)
             for i in range(5):
                 for j in range(5):
                     adj_LR[sender_index[i],reciever_index[j]] = 1
-                    # print(sender_index[i],reciever_index[j])
 
             # method2: Z*Z(T), select top3 high  
     
@@ -479,9 +440,6 @@ def generate_graph_from_anndata(dataset_name = 'cora_ml', directed=True):
 def load_data_from_seqfish(dataset_name = 'cora_ml', directed=True):
     # Import and pack datasets
 
-    # python DeepLinc.py -exp ./dataset/seqFISH/counts.csv -adj ./dataset/seqFISH/adj.csv 
-    # -coordinate ./dataset/seqFISH/coord.csv -reference ./dataset/seqFISH/cell_type_1.csv
-
     data_path = 'data/'
     data_name = 'seqFISH/'
     lambda_I = 0.3
@@ -508,7 +466,6 @@ def load_data_from_seqfish(dataset_name = 'cora_ml', directed=True):
     if not directed:
         adj  = (adj + adj.T) / 2.0
         
-    # mask = train_test_split(labels, seed=1020, train_examples_per_class=20, val_size=500, test_size=None)
     mask = train_test_split(labels, seed=1020, train_examples_per_class=10, val_size=500, test_size=None)
     
     mask['train'] = torch.from_numpy(mask['train']).bool()
@@ -545,9 +502,6 @@ def load_data_from_seqfish(dataset_name = 'cora_ml', directed=True):
 def load_data_from_merfish(dataset_name = 'cora_ml', directed=True):
     # Import and pack datasets
 
-    # python DeepLinc.py -exp ./dataset/seqFISH/counts.csv -adj ./dataset/seqFISH/adj.csv 
-    # -coordinate ./dataset/seqFISH/coord.csv -reference ./dataset/seqFISH/cell_type_1.csv
-
     data_path = 'data/'
     data_name = 'MERFISH/'
     lambda_I = 0.3
@@ -571,7 +525,6 @@ def load_data_from_merfish(dataset_name = 'cora_ml', directed=True):
     if not directed:
         adj  = (adj + adj.T) / 2.0
         
-    # mask = train_test_split(labels, seed=1020, train_examples_per_class=20, val_size=500, test_size=None)
     mask = train_test_split(labels, seed=1020, train_examples_per_class=10, val_size=500, test_size=None)
     
     mask['train'] = torch.from_numpy(mask['train']).bool()
@@ -608,9 +561,6 @@ def load_data_from_merfish(dataset_name = 'cora_ml', directed=True):
 def load_data_from_HDST(dataset_name = 'cora_ml', directed=True, filter_num=None, add_number=None):
     # Import and pack datasets
 
-    # python DeepLinc.py -exp ./dataset/seqFISH/counts.csv -adj ./dataset/seqFISH/adj.csv 
-    # -coordinate ./dataset/seqFISH/coord.csv -reference ./dataset/seqFISH/cell_type_1.csv
-
     data_path = 'data/'
     data_name = dataset_name + '/'
     lambda_I = 0.3
@@ -644,7 +594,6 @@ def load_data_from_HDST(dataset_name = 'cora_ml', directed=True, filter_num=None
     if not directed:
         adj  = (adj + adj.T) / 2.0
         
-    # mask = train_test_split(labels, seed=1020, train_examples_per_class=20, val_size=500, test_size=None)
     mask = train_test_split(labels, seed=1020, train_examples_per_class=10, val_size=500, test_size=None)
     
     mask['train'] = torch.from_numpy(mask['train']).bool()

@@ -32,7 +32,10 @@ from utils import *
 
 parser = argparse.ArgumentParser()
 
-
+parser.add_argument('--seed',
+                    nargs= '?',
+                    default=0,
+                    type=int)
 parser.add_argument('--test_ratio',
                     nargs= '?',
                     default=0.1,
@@ -87,6 +90,15 @@ parser.add_argument('--dataset',
                     nargs= '?',
                     default='cora_ml',
                     type=str)
+parser.add_argument('--celltype_nosie',
+                    nargs= '?',
+                    default='cora_ml',
+                    type=str)
+parser.add_argument('--celltype_nosie_ratio',
+                    nargs= '?',
+                    default=0.1,
+                    type=float)
+                    
 parser.add_argument('--task',
                     nargs= '?',
                     default='task_1',
@@ -354,7 +366,8 @@ def read_LR(LR_df):
 
 dummy_run = False
  
-seed = 0 #10
+seed = 42 #1,2,3,4,5,6,7,8,9,10,42
+seed = args.seed
 np.random.seed(seed)
 # # # random.seed(seed)
 torch.manual_seed(seed) #cpu
@@ -472,7 +485,7 @@ for i in range(args.nb_run):
     if args.verbose:
         print("Masking test edges...")
 
-    
+    print(args.task)
     #### split dataset
     if args.task == 'task_1':
         data = loaded_data.clone()
@@ -531,6 +544,28 @@ for i in range(args.nb_run):
     else:
         raise ValueError('Undefined task!')
 
+    print('original cell types: ',data.y)
+    ######## modified by jinxian: add noise to cell type information, 20250616
+    if args.celltype_nosie == 'random_flip':
+        data_path = 'generated_data/'
+        data_name = dataset_name
+        data_file = data_path + data_name +'/' + 'cell_type_with_noise/random_flip/' + 'cell_types_random_flip_' + str(args.celltype_nosie_ratio) + '.npy'
+        cell_type_indeces = np.load(data_file, allow_pickle=True)
+        cell_type = cell_type_indeces.astype(np.int32)
+        labels   = torch.from_numpy(cell_type).long()
+        data.y = labels
+
+    if args.celltype_nosie == 'random_generate':
+        data_path = 'generated_data/'
+        data_name = dataset_name
+        data_file = data_path + data_name +'/' + 'cell_type_with_noise/random_generate/' + 'cell_type_random_generate_seed42' + '.npy'
+        cell_type_indeces = np.load(data_file, allow_pickle=True)
+        cell_type = cell_type_indeces.astype(np.int32)
+        labels   = torch.from_numpy(cell_type).long()
+        data.y = labels
+    print('modified cell types', data.y)
+
+
     data                 = data.to(device)
     train_pos_edge_index = data.train_pos_edge_index.to(device)
     if args.validate is True:
@@ -539,7 +574,6 @@ for i in range(args.nb_run):
     else:
         test_pos_edge_index  = data.test_pos_edge_index.to(device)
         test_neg_edge_index  = data.test_neg_edge_index.to(device)
-
 
     if feature_vector_type in ['svd', 'svd_randomized', 'random', 'normal', 'random_ones']:
         in_channels  = feature_vector_size
@@ -568,9 +602,11 @@ for i in range(args.nb_run):
 
     print('u,v: ',u.shape, v.shape)
 
-    x = data.x.to(device)
+    ###### modified by jinxian 20250423 
+    # x = data.x.to(device)
+    data = data.cpu()
 
-    in_channels          = data.v.shape[1]
+    in_channels = data.v.shape[1]
 
     # if feature_vector_type == 'LR':
     #     out_channels =  in_channels
@@ -587,6 +623,7 @@ for i in range(args.nb_run):
 
     #### heterogeneous digae
     elif args.model == 'HEAT_digae':
+        print(data.y)
         encoder = Heterogeneous_DirectedGCNConvEncoder(in_channels, hidden_channels, out_channels, data.y, alpha=args.alpha, beta=args.beta,
                                          self_loops=args.self_loops,
                                          adaptive=args.adaptive)
@@ -656,8 +693,14 @@ for i in range(args.nb_run):
         filename = 'results/AUC/'+dataset_name+'/'+dataset_name+'_dropout_gene_'+str(args.dropout_gene_ratio)+'_iter'+str(i)+'.csv'
     elif args.dropout_value:
         filename = 'results/AUC/'+dataset_name+'/'+dataset_name+'_dropout_value_'+str(args.dropout_value_ratio)+'_iter'+str(i)+'.csv'
+    elif args.celltype_nosie:
+        if args.celltype_nosie == 'random_flip':
+            filename = 'results/AUC/'+dataset_name+'/'+dataset_name+'_celltype_nosie_random_flip_'+str(args.celltype_nosie_ratio)+'_iter'+str(i)+'.csv'
+        if args.celltype_nosie == 'random_generate':
+            filename = 'results/AUC/'+dataset_name+'/'+dataset_name+'_celltype_nosie_random_generate' +'_iter'+str(i)+'.csv'    
     else:
         filename = 'results/AUC/'+dataset_name+'/'+dataset_name+'_missingratio'+str(test_ratio)+'_iter'+str(i)+'.csv'
+
     df_iter.to_csv(filename)
 
     if args.verbose:
@@ -678,350 +721,6 @@ for i in range(args.nb_run):
     print(adj_pred)
     print("AUC score: ", roc_score,
       "\nAP scores : ", ap_score, "\n \n")
-
-    # # ### load best model to do later analysis
-    # # model = torch.load('model/model_best.pth')
-    # # auc, ap, adj_pred, s, t = test_func(test_pos_edge_index, test_neg_edge_index)
-    # # roc_score, ap_score = auc, ap
-    # # mean_roc.append(roc_score)
-    # # mean_ap.append(ap_score)
-    # # print(adj_pred)
-    # # print("AUC score: ", roc_score,
-    # #   "\nAP scores : ", ap_score, "\n \n")
-    # if roc_score > 0.9:
-    #     # sender_matrix = s.numpy()
-    #     # receiver_matrix = t.numpy()
-    #     # df_sender = pd.DataFrame(data=sender_matrix,columns=data.LR_name)
-    #     # df_receiver = pd.DataFrame(data=receiver_matrix,columns=data.LR_name)
-    #     # df_sender.to_csv('results/matrix/sender_iter_'+str(i)+'.csv')
-    #     # df_receiver.to_csv('results/matrix/receiver_iter_'+str(i)+'.csv')
-    #     # save_name = 'results/matrix/adj_pred_'+str(i)+'.npy'
-    #     # np.save(save_name,adj_pred)
-
-
-    ################################################################# # 3.3. 连接可视化
-    if args.visualize:
-        adj = data.adj.todense()
-        adj_reconstructed = adj_pred
-        adj_reconstructed[adj_reconstructed>=0.5]=1
-        adj_reconstructed[adj_reconstructed<0.5]=0
-        adj_reconstructed = adj_reconstructed.numpy()
-
-        cell_label_df = pd.read_csv('data/' + dataset_name + '/cell_type.csv')
-        cell_label = cell_label_df.values
-        coord_df = pd.read_csv('data/' + dataset_name + '/coord.csv')
-        coord = coord_df.values
-
-        id_subgraph, _ = ranked_partial(adj, adj_reconstructed, coord, [10,15])  #返回的是[(diff,[id_list]),(diff,[id_list])...]这种形式
-                                                                                                    #adj_rec1:[10,15], adj_rec2:[3,5]
-        rank = 0
-        for item in id_subgraph:
-            cell_type_subgraph = cell_label[item[1],:][:,[0,1]]
-            cell_type_subgraph[:,0] = np.array(list(range(cell_type_subgraph.shape[0]))) + 1  #需要对X重新生成细胞的id，这里以1开始
-            coord_subgraph = coord[item[1],:]
-            adj_reconstructed_subgraph = adj_reconstructed[item[1],:][:,item[1]]
-            rank += 1
-            adjacency_visualization(cell_type_subgraph, coord_subgraph, adj_reconstructed_subgraph, filename='spatial_network_rank'+str(rank)+'_diff'+str('%.3f'%item[0]))
-
-    #################################################################
-    if args.enrichment:
-        cell_label_df = pd.read_csv('data/' + dataset_name + '/cell_type.csv')
-        cell_label = cell_label_df.values
-        coord_df = pd.read_csv('data/' + dataset_name + '/coord.csv')
-        coord = coord_df.values
-        adj = data.adj.todense()
-        # threshold
-        adj_pred[adj_pred>=0.5]=1
-        adj_pred[adj_pred<0.5]=0
-        adj_pred = adj_pred.numpy()
-
-        adj_diff = adj - adj_pred
-        adj_diff = (adj_diff == -1).astype('int')
-        adj_diff = sp.csr_matrix(adj_diff)
-
-        dist_matrix_rongyu = pdist(coord, 'euclidean')
-        dist_matrix = squareform(dist_matrix_rongyu)
-
-        new_edges = sparse2tuple(sp.triu(sp.csr_matrix(adj_diff)))[0]
-        all_new_edges_dist = dist_matrix[new_edges[:,0].tolist(),new_edges[:,1].tolist()]
-        plot_histogram(all_new_edges_dist, xlabel='distance', ylabel='density', filename='all_new_edges_distance', color="coral")
-        write_csv_matrix(dist_matrix*adj_diff, 'results/enrichment/'+dataset_name+'/all_new_edges_dist_matrix'+'_iter'+str(i))
-
-        # -over/-under representation of particular types of interactions
-        cutoff_distance = np.percentile(all_new_edges_dist,99)
-        print('cutoff_distance: ',cutoff_distance)
-
-        connection_number, _ = connection_number_between_groups(adj, cell_label[:,1])
-        write_csv_matrix(connection_number, 'results/enrichment/'+dataset_name+'/connection_number_between_groups'+'_iter'+str(i))
-
-        adj_new_long_edges = generate_adj_new_long_edges(dist_matrix, new_edges, all_new_edges_dist, cutoff_distance)
-        write_csv_matrix(adj_new_long_edges.todense(), 'results/enrichment/'+dataset_name+'/adj_new_long_edges'+'_iter'+str(i))
-
-        print('------permutations calculating------')
-        # cell_type_name = [np.unique(cell_label[cell_label[:,1]==i,2])[0] for i in np.unique(cell_label[:,1])]
-        # test_result, _, _, _ = edges_enrichment_evaluation(adj, cell_label[:,1], cell_type_name, edge_type='all edges',N=1000)
-        # write_csv_matrix(test_result, 'results/all_edges_enrichment_evaluation_original', colnames=['cell type A','cell type B','average_connectivity','significance'])
-
-        cell_type_name = [np.unique(cell_label[cell_label[:,1]==i,2])[0] for i in np.unique(cell_label[:,1])]
-        test_result, _, _, _ = edges_enrichment_evaluation(adj_pred, cell_label[:,1], cell_type_name, edge_type='all edges',N=1000)
-        write_csv_matrix(test_result, 'results/enrichment/'+dataset_name+'/all_edges_enrichment_evaluation'+'_iter'+str(i), colnames=['cell type A','cell type B','average_connectivity','significance'])
-        test_result, _, _, _ = edges_enrichment_evaluation(adj_new_long_edges.toarray(), cell_label[:,1], cell_type_name, edge_type='long edges', dist_matrix=dist_matrix, cutoff_distance=cutoff_distance,N=1000)
-        write_csv_matrix(test_result, 'results/enrichment/'+dataset_name+'/long_edges_enrichment_evaluation'+'_iter'+str(i), colnames=['cell type A','cell type B','connection_number','significance'])
-
-    if args.sensitivity_celltype_LR:
-        if dataset_name == 'MERFISH':
-            ############## select Microglia-Astrocyte edges as test edges
-            adj_reconstructed = adj_pred
-            adj_reconstructed[adj_reconstructed>=0.5]=1
-            adj_reconstructed[adj_reconstructed<0.5]=0
-            adj_reconstructed = adj_reconstructed.numpy()
-
-            adj_reconstructed = sp.csr_matrix(adj_reconstructed)
-            coo = adj_reconstructed.tocoo()
-            indices = np.vstack((coo.row, coo.col))
-            indices = torch.from_numpy(indices).long()
-
-            cell_label_df = pd.read_csv('data/' + dataset_name + '/cell_type.csv')
-            cell_label = cell_label_df['Cell_class_name'].values
-
-            cell_index  = np.arange(x.size(0))
-            lst_celltype0 = cell_index[np.array(cell_label=='Microglia')].tolist()
-            lst_celltype1 = cell_index[np.array(cell_label=='Astrocyte')].tolist()
-            temp0 = torch.isin(indices[0,:],torch.tensor(lst_celltype0))
-            temp1 = torch.isin(indices[1,:],torch.tensor(lst_celltype1))
-            test = temp0 & temp1
-            test_pos_edge_index = indices[:,test]
-
-            ############## start to compute 
-            roc_score_orig, ap_score_orig, adj_pred_orig, _, _ = single_gene_occlusion(u, v, test_pos_edge_index, test_neg_edge_index)
-
-            CellChatDB_LR = np.load('data/MERFISH/CellChatDB_LR.npy')
-
-            df_info = pd.read_csv('generated_data/MERFISH/counts.csv')
-            genes = df_info.columns.values
-            mapping = {}
-            for i in range(len(genes)):
-                mapping[genes[i]] = i 
-
-            # Calculate the test score for each LR in a loop
-            single_gene_roc_score = dict()
-            single_gene_ap_score = dict()
-            for k in range(0,len(CellChatDB_LR)):
-                ligand = CellChatDB_LR[k].split('-')[0]
-                receptor = CellChatDB_LR[k].split('-')[1]
-                ligand_index = mapping[ligand]
-                receptor_index = mapping[receptor]
-
-                col_all_roc_score = []
-                col_all_ap_score = []
-                for j in range(30): #30
-                    u_occlu = copy.deepcopy(u)
-                    v_occlu = copy.deepcopy(v)
-                    np.random.shuffle(u_occlu[:,ligand_index])
-                    np.random.shuffle(v_occlu[:,receptor_index])
-                    roc_score, ap_score, _, _, _  = single_gene_occlusion(u_occlu, v_occlu, test_pos_edge_index, test_neg_edge_index)
-                    col_all_roc_score.append(roc_score)
-                    col_all_ap_score.append(ap_score)
-                    del u_occlu, v_occlu
-                gene_name = CellChatDB_LR[k] 
-                print(gene_name)
-                single_gene_roc_score.update({gene_name: col_all_roc_score})
-                single_gene_ap_score.update({gene_name: col_all_ap_score})
-
-            occlu_roc = {}
-            occlu_ap = {}
-            for k,v in single_gene_roc_score.items():
-                occlu_roc[k] = np.mean(np.array(v))
-
-            for k,v in single_gene_ap_score.items():
-                occlu_ap[k] = np.mean(np.array(v))
-
-            # Get gene sensitivity
-            occlu_deta_ap = {}
-            occlu_deta_roc = {}
-            for k,v in occlu_ap.items():
-                occlu_deta_ap[k] = np.abs(float(ap_score_orig) - np.array(v).mean())
-            for k,v in occlu_roc.items():
-                occlu_deta_roc[k] = np.abs(float(roc_score_orig) - np.array(v).mean())
-
-            ## sort genes
-            genes_list = occlu_deta_ap.keys()
-            delta_ap = occlu_deta_ap.values()
-            pd_delta_ap = pd.DataFrame({'genes_list':genes_list,'delta_ap':delta_ap})
-            pd_delta_ap = pd_delta_ap.sort_values('delta_ap',ascending=False)
-            file_name = 'results/deltaAUC/'+dataset_name+'_delta_ap_celltypeLR_iter'+str(i)+'.csv'
-            pd_delta_ap.to_csv(file_name)
-
-            genes_list = occlu_deta_roc.keys()
-            delta_roc = occlu_deta_roc.values()
-            pd_delta_roc = pd.DataFrame({'genes_list':genes_list,'delta_roc':delta_roc})
-            pd_delta_roc = pd_delta_roc.sort_values('delta_roc',ascending=False)
-            file_name = 'results/deltaAUC/'+dataset_name+'_delta_roc_celltypeLR_iter'+str(i)+'.csv'
-            pd_delta_roc.to_csv(file_name)
-
-
-    if args.sensitivity_long:
-        cell_label_df = pd.read_csv('data/' + dataset_name + '/cell_type.csv')
-        cell_label = cell_label_df.values
-        coord_df = pd.read_csv('data/' + dataset_name + '/coord.csv')
-        coord = coord_df.values
-        adj = data.adj.todense()
-        # threshold
-        adj_pred[adj_pred>=0.5]=1
-        adj_pred[adj_pred<0.5]=0
-        adj_pred = adj_pred.numpy()
-
-        adj_diff = adj - adj_pred
-        adj_diff = (adj_diff == -1).astype('int')
-        adj_diff = sp.csr_matrix(adj_diff)
-
-        dist_matrix_rongyu = pdist(coord, 'euclidean')
-        dist_matrix = squareform(dist_matrix_rongyu)
-
-        new_edges = sparse2tuple(sp.triu(sp.csr_matrix(adj_diff)))[0]
-        all_new_edges_dist = dist_matrix[new_edges[:,0].tolist(),new_edges[:,1].tolist()]
-
-        cutoff_ratio = 90
-        cutoff_distance = np.percentile(all_new_edges_dist,cutoff_ratio)
-        print('cutoff_distance: ',cutoff_distance)
-
-        adj_new_long_edges = generate_adj_new_long_edges(dist_matrix, new_edges, all_new_edges_dist, cutoff_distance)
-
-        coo = adj_new_long_edges.tocoo()
-        indices = np.vstack((coo.row, coo.col))
-        indices = torch.from_numpy(indices).long()
-        print('change test_pos_edge to long distance edges...')
-        print(test_pos_edge_index)
-        test_pos_edge_index = indices
-        print(test_pos_edge_index)
-
-    ############################################## get_sensitivity
-    if args.sensitivity  or args.sensitivity_long:
-        if args.sensitivity:
-            roc_score_orig, ap_score_orig, adj_pred_orig, _, _ = single_gene_occlusion(u, v, test_pos_edge_index, test_neg_edge_index)
-        elif args.sensitivity_long:
-            roc_score_orig, ap_score_orig, adj_pred_orig, _, _ = single_gene_occlusion(u, v, test_pos_edge_index,test_neg_edge_index) #single_gene_occlusion_positive
-
-        # compute for each gene:
-        if dataset_name == 'HDST_ob' or dataset_name == 'HDST_cancer':
-            df_info = pd.read_csv('data/'+ dataset_name + '/counts.csv')
-            genes = df_info.columns.values
-
-            # Calculate the test score for each gene in a loop
-            single_gene_roc_score = dict()
-            single_gene_ap_score = dict()
-            for k in range(0,u.shape[1]):
-            # for i in range(0,3):
-                col_all_roc_score = []
-                col_all_ap_score = []
-                for j in range(30): #30
-                    u_occlu = copy.deepcopy(u)
-                    v_occlu = copy.deepcopy(v)
-                    np.random.shuffle(u_occlu[:,k])
-                    np.random.shuffle(v_occlu[:,k])
-                    if args.sensitivity:
-                        roc_score, ap_score, _, _, _ = single_gene_occlusion(u_occlu, v_occlu, test_pos_edge_index, test_neg_edge_index)
-                    elif args.sensitivity_long:
-                        roc_score, ap_score, _, _, _ = single_gene_occlusion(u_occlu, v_occlu, test_pos_edge_index,test_neg_edge_index) #single_gene_occlusion_positive
-                    col_all_roc_score.append(roc_score)
-                    col_all_ap_score.append(ap_score)
-                    del u_occlu, v_occlu
-                gene_name = genes[k] 
-                print(gene_name)
-                single_gene_roc_score.update({gene_name: col_all_roc_score})
-                single_gene_ap_score.update({gene_name: col_all_ap_score})
-
-            occlu_roc = {}
-            occlu_ap = {}
-            for k,v in single_gene_roc_score.items():
-                occlu_roc[k] = np.mean(np.array(v))
-
-            for k,v in single_gene_ap_score.items():
-                occlu_ap[k] = np.mean(np.array(v))
-
-            # Get gene sensitivity
-            occlu_deta_ap = {}
-            occlu_deta_roc = {}
-            for k,v in occlu_ap.items():
-                occlu_deta_ap[k] = np.abs(float(ap_score_orig) - np.array(v).mean())
-            for k,v in occlu_roc.items():
-                occlu_deta_roc[k] = np.abs(float(roc_score_orig) - np.array(v).mean())
-
-            ## sort genes
-            genes_list = occlu_deta_ap.keys()
-            delta_ap = occlu_deta_ap.values()
-            pd_delta_ap = pd.DataFrame({'genes_list':genes_list,'delta_ap':delta_ap})
-            pd_delta_ap = pd_delta_ap.sort_values('delta_ap',ascending=False)
-            file_name = 'results/deltaAUC/'+dataset_name+'_delta_ap_iter'+str(i)+'percent'+str(cutoff_ratio)+'.csv'
-            pd_delta_ap.to_csv(file_name)
-
-            genes_list = occlu_deta_roc.keys()
-            delta_roc = occlu_deta_roc.values()
-            pd_delta_roc = pd.DataFrame({'genes_list':genes_list,'delta_roc':delta_roc})
-            pd_delta_roc = pd_delta_roc.sort_values('delta_roc',ascending=False)
-            file_name = 'results/deltaAUC/'+dataset_name+'_delta_roc_iter'+str(i)+'percent'+str(cutoff_ratio)+'.csv'
-            pd_delta_roc.to_csv(file_name)
-
-
-        if dataset_name == 'MERFISH' or dataset_name == 'seqFISH':
-            if dataset_name == 'MERFISH':
-                df_info = pd.read_csv('generated_data/MERFISH/counts.csv')
-                genes = df_info.columns.values
-            if dataset_name == 'seqFISH':
-                df_info = pd.read_csv('data/seqFISH/counts.csv')
-                genes = df_info.columns.values            
-
-            # Calculate the test score for each gene in a loop
-            single_gene_roc_score = dict()
-            single_gene_ap_score = dict()
-            for k in range(0,u.shape[1]):
-            # for k in range(0,3):
-                col_all_roc_score = []
-                col_all_ap_score = []
-                for j in range(30): #30
-                    u_occlu = copy.deepcopy(u)
-                    v_occlu = copy.deepcopy(v)
-                    np.random.shuffle(u_occlu[:,k])
-                    np.random.shuffle(v_occlu[:,k])
-                    roc_score, ap_score, _, _, _  = single_gene_occlusion(u_occlu, v_occlu, test_pos_edge_index, test_neg_edge_index)
-                    col_all_roc_score.append(roc_score)
-                    col_all_ap_score.append(ap_score)
-                    del u_occlu, v_occlu
-                gene_name = genes[k] 
-                print(gene_name)
-                single_gene_roc_score.update({gene_name: col_all_roc_score})
-                single_gene_ap_score.update({gene_name: col_all_ap_score})
-
-            occlu_roc = {}
-            occlu_ap = {}
-            for k,v in single_gene_roc_score.items():
-                occlu_roc[k] = np.mean(np.array(v))
-
-            for k,v in single_gene_ap_score.items():
-                occlu_ap[k] = np.mean(np.array(v))
-
-            # Get gene sensitivity
-            occlu_deta_ap = {}
-            occlu_deta_roc = {}
-            for k,v in occlu_ap.items():
-                occlu_deta_ap[k] = np.abs(float(ap_score_orig) - np.array(v).mean())
-            for k,v in occlu_roc.items():
-                occlu_deta_roc[k] = np.abs(float(roc_score_orig) - np.array(v).mean())
-
-            ## sort genes
-            genes_list = occlu_deta_ap.keys()
-            delta_ap = occlu_deta_ap.values()
-            pd_delta_ap = pd.DataFrame({'genes_list':genes_list,'delta_ap':delta_ap})
-            pd_delta_ap = pd_delta_ap.sort_values('delta_ap',ascending=False)
-            file_name = 'results/deltaAUC/'+dataset_name+'_delta_ap_iter'+str(i)+'.csv'
-            pd_delta_ap.to_csv(file_name)
-
-            genes_list = occlu_deta_roc.keys()
-            delta_roc = occlu_deta_roc.values()
-            pd_delta_roc = pd.DataFrame({'genes_list':genes_list,'delta_roc':delta_roc})
-            pd_delta_roc = pd_delta_roc.sort_values('delta_roc',ascending=False)
-            file_name = 'results/deltaAUC/'+dataset_name+'_delta_roc_iter'+str(i)+'.csv'
-            pd_delta_roc.to_csv(file_name)
 
 
 # if adaptive...
@@ -1046,59 +745,3 @@ print("Mean AP score: ", np.mean(mean_ap),
 print("Running times\n", mean_time)
 print("Mean running time: ", np.mean(mean_time),
       "\nStd of running time: ", np.std(mean_time), "\n \n")
-
-
-
-# # ############################################################ save log file 
-# # from datetime import datetime
-# # import json
-
-# # now       = datetime.now()
-# # date_time = now.strftime("%m/%d/%Y, %H:%M:%S")
-
-# # log = {
-# #     'dataset'       : args.dataset,
-# #     'task'          : args.task,
-# #     'model'         : args.model,
-# #     'learning_rate' : args.learning_rate,
-# #     'epochs'        : args.epochs,
-# #     'hidden'        : args.hidden,
-# #     'dimension'     : args.dimension,
-# #     'alpha'         : args.alpha,
-# #     'beta'          : args.beta,
-# #     'nb_run'        : args.nb_run,
-# #     'prop_val'      : args.prop_val,
-# #     'prop_test'     : args.prop_test,
-
-# #     'directed'            : args.directed,  
-# #     'feature_vector_type' : args.feature_vector_type,
-# #     'feature_vector_size' : args.feature_vector_size,
-# #     'validate'            : args.validate,
-    
-# #     'date_time'     : date_time,
-# #     'auc_mean'      : np.mean(mean_roc),
-# #     'auc_std'       : np.std(mean_roc),
-# #     'ap_mean'       : np.mean(mean_ap),
-# #     'ap_std'        : np.std(mean_ap),
-# #     'time_mean'     : np.mean(mean_time),
-# #     'time_std'      : np.std(mean_time)
-# #     }
-    
-
-# # logfile = args.logfile
-
-# # try:
-# #     data = json.load(open(logfile))
-    
-# #     # convert data to list if not
-# #     if type(data) is dict:
-# #         data = [data]
-# # except:
-# #     data = []
-    
-# # # append new item to data list
-# # data.append(log)
-
-# # # write list to file
-# # with open(logfile, 'w') as outfile:
-# #     json.dump(data, outfile, indent=4, sort_keys=True)
