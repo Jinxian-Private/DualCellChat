@@ -23,7 +23,7 @@ python train.py --dataset=HDST_ob --model=digae --alpha=0.0 --beta=0.2 --epochs=
 
 #### Training of heterogeneous graph autoencoder models
 ```bash
-python train_HEAT.py --dataset=StereoSeq --model=HEAT_digae --alpha=0.0 --beta=0.2 --epochs=60 --nb_run=5 --logfile=HEAT_digae_StereoSeq_grid_search.json --learning_rate=0.005 --hidden=64 --dimension=32 --validate=True
+python train_HEAT.py --dataset=StereoSeq --model=HEAT_digae --alpha=0.0 --beta=0.2 --epochs=40 --nb_run=5 --logfile=HEAT_digae_StereoSeq_grid_search.json --learning_rate=0.005 --hidden=64 --dimension=32 --validate=True
 ```
 
 train.sh provides a complete training script for running DualCellChat.
