@@ -366,7 +366,7 @@ def read_LR(LR_df):
 
 dummy_run = False
  
-seed = 42 #1,2,3,4,5,6,7,8,9,10,42
+seed = 1 
 seed = args.seed
 np.random.seed(seed)
 # # # random.seed(seed)
